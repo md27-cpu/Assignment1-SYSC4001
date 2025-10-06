@@ -34,63 +34,69 @@ int main(int argc, char** argv) {
          
         /******************ADD YOUR SIMULATION CODE HERE*************************/
         if (activity == "CPU") {
-            
             add(current_time, duration_intr, "CPU Burst");
             current_time += duration_intr;
         }
         else if (activity == "SYSCALL") {
-            
             int dev = duration_intr;
             if (dev < 0 || dev >= (int)delays.size() || dev >= (int)vectors.size()) {
                 std::cerr << "Invalid device: " << dev << "\n";
                 continue;
             }
 
-            // standard interrupt 
+            // standard interrupt entry
             auto pre = intr_boilerplate(current_time, dev, context_save_time, vectors);
             execution += pre.first;
             current_time = pre.second;
 
-            // driver/ISR does fixed work
+            // ISR 
             add(current_time, isr_time, "SYSCALL: run the ISR (device driver)");
             current_time += isr_time;
 
-            // transfer data (fixed 40)
+            // transfer from device to memory
             add(current_time, 40, "transfer data from device to memory");
             current_time += 40;
 
-            // check for errors
             int check_err = delays[dev] - (isr_time + 40);
             if (check_err < 0) check_err = 0;
             add(current_time, check_err, "check for errors");
             current_time += check_err;
 
-            // return to user
+            // restore context + IRET 
+            add(current_time, context_save_time, "context restored");
+            current_time += context_save_time;
+
+            add(current_time, 1, "IRET");
+            current_time += 1;
         }
         else if (activity == "END_IO") {
-            // hardware interrupt
             int dev = duration_intr;
             if (dev < 0 || dev >= (int)delays.size() || dev >= (int)vectors.size()) {
                 std::cerr << "Invalid device: " << dev << "\n";
                 continue;
             }
 
-            // standard interrupt 
+            // standard interrupt entry
             auto pre = intr_boilerplate(current_time, dev, context_save_time, vectors);
             execution += pre.first;
             current_time = pre.second;
 
-            // driver/ISR does fixed work to service completion
+            // ISR work to service completion
             add(current_time, isr_time, "ENDIO: run the ISR (device driver)");
             current_time += isr_time;
 
-            // check device status
+            // device status/cleanup to match average delay
             int check_status = delays[dev] - isr_time;
             if (check_status < 0) check_status = 0;
             add(current_time, check_status, "check device status");
             current_time += check_status;
 
-            //return from interrupt back to user
+            // restore context + IRET 
+            add(current_time, context_save_time, "context restored");
+            current_time += context_save_time;
+
+            add(current_time, 1, "IRET");
+            current_time += 1;
         }
         /************************************************************************/
     }
