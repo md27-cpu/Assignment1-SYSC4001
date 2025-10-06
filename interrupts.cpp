@@ -1,7 +1,7 @@
 /**
  *
  * @file interrupts.cpp
- * @author 
+ * @author Marwa Diab
  *
  */
 
@@ -19,18 +19,24 @@ int main(int argc, char** argv) {
     std::string execution;  //!< string to accumulate the execution output
 
     /******************ADD YOUR VARIABLES HERE*************************/
-
-
+    int currenttime = 0;
+    int save_restore_context = 10;
+    const int isr = 40;
+    std::string log;
+    struct Event { std::string activity; int value; };
+    std::vector<Event> events;
 
     /******************************************************************/
 
     //parse each line of the input trace file
-    while(std::getline(input_file, trace)) {
+    while (std::getline(input_file, trace)) {
+        if (trace.empty()) continue;
         auto [activity, duration_intr] = parse_trace(trace);
+        if (activity == "null") continue;
 
         /******************ADD YOUR SIMULATION CODE HERE*************************/
-
-
+        // For Part (i): just parse and store input data.
+        events.push_back({activity, duration_intr}); 
 
         /************************************************************************/
 
