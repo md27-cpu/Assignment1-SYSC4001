@@ -19,12 +19,9 @@ int main(int argc, char** argv) {
     std::string execution;  //!< string to accumulate the execution output
 
     /******************ADD YOUR VARIABLES HERE*************************/
-    int current_time = 0;                
-    const int ctx = 10;                   
-    const int isr_time = 40;              
-    auto line = [&](int start, int dur, const std::string& msg) {
-        return std::to_string(start) + ", " + std::to_string(dur) + ", " + msg + "\n";
-    };
+    int current_time = 0;          
+    const int ctx = 10;            
+    const int isr_time = 40; 
 
     /******************************************************************/
     //parse each line of the input trace file
@@ -34,56 +31,59 @@ int main(int argc, char** argv) {
         /******************ADD YOUR SIMULATION CODE HERE*************************/
          
         if (activity == "CPU") {
-            execution += line(current_time, duration_intr, "CPU Burst");
+            execution += std::to_string(current_time) + ", " +
+                         std::to_string(duration_intr) + ", CPU Burst\n";
             current_time += duration_intr;
         }
         else if (activity == "SYSCALL") {
             int device = duration_intr;
-
             if (device < 0 || device >= (int)delays.size() || device >= (int)vectors.size()) {
                 std::cerr << "Invalid device: " << device << "\n";
                 continue;
             }
 
             // trap to kernel + context save + vector lookup + load PC
-            auto [prelog, new_time] = intr_boilerplate(current_time, device, ctx, vectors);
-            execution += prelog;
-            current_time = new_time;
+            auto result = intr_boilerplate(current_time, device, ctx, vectors);
+            execution += result.first;
+            current_time = result.second;
 
-            // run the system-call handler (software path)
-            execution += line(current_time, isr_time, "execute system call for device " + std::to_string(device));
+            // execute the system call (software handler)
+            execution += std::to_string(current_time) + ", " +
+                         std::to_string(isr_time) + ", execute system call for device " +
+                         std::to_string(device) + "\n";
             current_time += isr_time;
 
-            // start the device I/O (device runs asynchronously)
-            execution += line(current_time, 1, "start I/O on device " + std::to_string(device));
+            // start the device I/O 
+            execution += std::to_string(current_time) + ", 1, start I/O on device " +
+                         std::to_string(device) + "\n";
             current_time += 1;
 
-            // return to user (restore context)
-            execution += line(current_time, ctx, "return to user (context restored)");
+            // return to user 
+            execution += std::to_string(current_time) + ", " +
+                         std::to_string(ctx) + ", return to user (context restored)\n";
             current_time += ctx;
-
-            // NOTE: we do NOT wait for the device delay here.
-            
         }
         else if (activity == "END_IO") {
             int device = duration_intr;
-
             if (device < 0 || device >= (int)delays.size() || device >= (int)vectors.size()) {
                 std::cerr << "Invalid device: " << device << "\n";
                 continue;
             }
 
-            // device asserts an interrupt,trap to kernel and handle completion
-            auto [prelog, new_time] = intr_boilerplate(current_time, device, ctx, vectors);
-            execution += prelog;
-            current_time = new_time;
+            // device completion interrupt
+            auto result = intr_boilerplate(current_time, device, ctx, vectors);
+            execution += result.first;
+            current_time = result.second;
 
-            // finish I/O: service completion
-            execution += line(current_time, isr_time, "service device " + std::to_string(device) + " completion");
+            // service completion
+            execution += std::to_string(current_time) + ", " +
+                         std::to_string(isr_time) + ", service device " +
+                         std::to_string(device) + " completion\n";
             current_time += isr_time;
 
-            // return from interrupt to user mode
-            execution += line(current_time, ctx, "return from interrupt (context restored)");
+            // return from interrupt
+            execution += std::to_string(current_time) + ", " +
+                         std::to_string(ctx) + ", return from interrupt (context restored)\n";
             current_time += ctx;
         }
 
