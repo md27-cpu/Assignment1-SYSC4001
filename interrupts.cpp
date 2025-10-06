@@ -19,24 +19,74 @@ int main(int argc, char** argv) {
     std::string execution;  //!< string to accumulate the execution output
 
     /******************ADD YOUR VARIABLES HERE*************************/
-    int currenttime = 0;
-    int save_restore_context = 10;
-    const int isr = 40;
-    std::string log;
-    struct Event { std::string activity; int value; };
-    std::vector<Event> events;
+    int current_time = 0;                
+    const int ctx = 10;                   
+    const int isr_time = 40;              
+    auto line = [&](int start, int dur, const std::string& msg) {
+        return std::to_string(start) + ", " + std::to_string(dur) + ", " + msg + "\n";
+    };
 
     /******************************************************************/
 
     //parse each line of the input trace file
-    while (std::getline(input_file, trace)) {
-        if (trace.empty()) continue;
+     while(std::getline(input_file, trace)) {
         auto [activity, duration_intr] = parse_trace(trace);
-        if (activity == "null") continue;
-
+         
         /******************ADD YOUR SIMULATION CODE HERE*************************/
-        // For Part (i): just parse and store input data.
-        events.push_back({activity, duration_intr}); 
+         
+        if (activity == "CPU") {
+            execution += line(current_time, duration_intr, "CPU Burst");
+            current_time += duration_intr;
+        }
+        else if (activity == "SYSCALL") {
+            int device = duration_intr;
+
+            if (device < 0 || device >= (int)delays.size() || device >= (int)vectors.size()) {
+                std::cerr << "Invalid device: " << device << "\n";
+                continue;
+            }
+
+            // trap to kernel + context save + vector lookup + load PC
+            auto [prelog, new_time] = intr_boilerplate(current_time, device, ctx, vectors);
+            execution += prelog;
+            current_time = new_time;
+
+            // run the system-call handler (software path)
+            execution += line(current_time, isr_time, "execute system call for device " + std::to_string(device));
+            current_time += isr_time;
+
+            // start the device I/O (device runs asynchronously)
+            execution += line(current_time, 1, "start I/O on device " + std::to_string(device));
+            current_time += 1;
+
+            // return to user (restore context)
+            execution += line(current_time, ctx, "return to user (context restored)");
+            current_time += ctx;
+
+            // NOTE: we do NOT wait for the device delay here.
+            
+        }
+        else if (activity == "END_IO") {
+            int device = duration_intr;
+
+            if (device < 0 || device >= (int)delays.size() || device >= (int)vectors.size()) {
+                std::cerr << "Invalid device: " << device << "\n";
+                continue;
+            }
+
+            // device asserts an interrupt,trap to kernel and handle completion
+            auto [prelog, new_time] = intr_boilerplate(current_time, device, ctx, vectors);
+            execution += prelog;
+            current_time = new_time;
+
+            // finish I/O: service completion
+            execution += line(current_time, isr_time, "service device " + std::to_string(device) + " completion");
+            current_time += isr_time;
+
+            // return from interrupt to user mode
+            execution += line(current_time, ctx, "return from interrupt (context restored)");
+            current_time += ctx;
+        }
 
         /************************************************************************/
 
