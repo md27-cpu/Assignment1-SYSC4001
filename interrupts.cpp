@@ -19,9 +19,13 @@ int main(int argc, char** argv) {
     std::string execution;  //!< string to accumulate the execution output
 
     /******************ADD YOUR VARIABLES HERE*************************/
-    int current_time = 0;          
-    const int ctx = 10;            
+    int current_time = 0;
+    const int context_save_time = 10;
     const int isr_time = 40; 
+    
+    auto add = [&](int start, int dur, const std::string& msg) {
+        execution += std::to_string(start) + ", " + std::to_string(dur) + ", " + msg + "\n";
+    };
 
     /******************************************************************/
     //parse each line of the input trace file
@@ -29,66 +33,66 @@ int main(int argc, char** argv) {
         auto [activity, duration_intr] = parse_trace(trace);
          
         /******************ADD YOUR SIMULATION CODE HERE*************************/
-         
         if (activity == "CPU") {
-            execution += std::to_string(current_time) + ", " +
-                         std::to_string(duration_intr) + ", CPU Burst\n";
+            
+            add(current_time, duration_intr, "CPU Burst");
             current_time += duration_intr;
         }
         else if (activity == "SYSCALL") {
-            int device = duration_intr;
-            if (device < 0 || device >= (int)delays.size() || device >= (int)vectors.size()) {
-                std::cerr << "Invalid device: " << device << "\n";
+            
+            int dev = duration_intr;
+            if (dev < 0 || dev >= (int)delays.size() || dev >= (int)vectors.size()) {
+                std::cerr << "Invalid device: " << dev << "\n";
                 continue;
             }
 
-            // trap to kernel + context save + vector lookup + load PC
-            auto result = intr_boilerplate(current_time, device, ctx, vectors);
-            execution += result.first;
-            current_time = result.second;
+            // standard interrupt 
+            auto pre = intr_boilerplate(current_time, dev, context_save_time, vectors);
+            execution += pre.first;
+            current_time = pre.second;
 
-            // execute the system call (software handler)
-            execution += std::to_string(current_time) + ", " +
-                         std::to_string(isr_time) + ", execute system call for device " +
-                         std::to_string(device) + "\n";
+            // driver/ISR does fixed work
+            add(current_time, isr_time, "SYSCALL: run the ISR (device driver)");
             current_time += isr_time;
 
-            // start the device I/O 
-            execution += std::to_string(current_time) + ", 1, start I/O on device " +
-                         std::to_string(device) + "\n";
-            current_time += 1;
+            // transfer data (fixed 40)
+            add(current_time, 40, "transfer data from device to memory");
+            current_time += 40;
 
-            // return to user 
-            execution += std::to_string(current_time) + ", " +
-                         std::to_string(ctx) + ", return to user (context restored)\n";
-            current_time += ctx;
+            // check for errors
+            int check_err = delays[dev] - (isr_time + 40);
+            if (check_err < 0) check_err = 0;
+            add(current_time, check_err, "check for errors");
+            current_time += check_err;
+
+            // return to user
         }
         else if (activity == "END_IO") {
-            int device = duration_intr;
-            if (device < 0 || device >= (int)delays.size() || device >= (int)vectors.size()) {
-                std::cerr << "Invalid device: " << device << "\n";
+            // hardware interrupt
+            int dev = duration_intr;
+            if (dev < 0 || dev >= (int)delays.size() || dev >= (int)vectors.size()) {
+                std::cerr << "Invalid device: " << dev << "\n";
                 continue;
             }
 
-            // device completion interrupt
-            auto result = intr_boilerplate(current_time, device, ctx, vectors);
-            execution += result.first;
-            current_time = result.second;
+            // standard interrupt 
+            auto pre = intr_boilerplate(current_time, dev, context_save_time, vectors);
+            execution += pre.first;
+            current_time = pre.second;
 
-            // service completion
-            execution += std::to_string(current_time) + ", " +
-                         std::to_string(isr_time) + ", service device " +
-                         std::to_string(device) + " completion\n";
+            // driver/ISR does fixed work to service completion
+            add(current_time, isr_time, "ENDIO: run the ISR (device driver)");
             current_time += isr_time;
 
-            // return from interrupt
-            execution += std::to_string(current_time) + ", " +
-                         std::to_string(ctx) + ", return from interrupt (context restored)\n";
-            current_time += ctx;
+            // check device status
+            int check_status = delays[dev] - isr_time;
+            if (check_status < 0) check_status = 0;
+            add(current_time, check_status, "check device status");
+            current_time += check_status;
+
+            //return from interrupt back to user
         }
-
         /************************************************************************/
-
     }
 
     input_file.close();
