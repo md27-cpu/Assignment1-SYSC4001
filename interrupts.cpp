@@ -1,7 +1,7 @@
 /**
  *
  * @file interrupts.cpp
- * @author Marwa Diab
+ * @authors Marwa Diab and Iman Walid
  *
  */
 
