@@ -27,7 +27,6 @@ int main(int argc, char** argv) {
     };
 
     /******************************************************************/
-
     //parse each line of the input trace file
      while(std::getline(input_file, trace)) {
         auto [activity, duration_intr] = parse_trace(trace);
